@@ -5,10 +5,9 @@ measured experiment: it reads the problem, researches the literature, proposes
 hypotheses in code, runs them, and explains the result.
 
 This repository is a **snapshot of the agent core** extracted from the Falen
-project. It is published as a first working attempt, not as a library. The
-behavior is intentionally simple, the loop is sequential, and several sections
-are still prototypes. A paper describing the approach and its evaluations is
-planned.
+project, with one change: it only ships the `enterprise` path. There is no
+academic agent and no HTTP API here. The CLI is served over `ttyd`, one session
+per visitor.
 
 ## How the loop works
 
@@ -50,7 +49,9 @@ explanation printed to the user
 
 ```
 F001MM/
-├── main.py                          # CLI entry point
+├── interface.py                     # click shell — the actual agent CLI
+├── sessionBroker.py                 # one ttyd per browser session + proxy
+├── start.sh                         # starts the broker
 ├── tracker.py                       # optional ops logging (Supabase / SQLite)
 ├── requirements.txt
 ├── .env.example
@@ -64,12 +65,13 @@ F001MM/
         └── temporaryCode/           # hypothesis code written and cleaned per run
 ```
 
-The files keep the original flat imports, so `main.py` adds the agent
-directories to `sys.path` before importing the loop.
+The agent files keep the original flat imports, so `interface.py` adds the
+agent directories to `sys.path` before importing the loop.
 
 ## Setup
 
-Requires Python 3.13.
+Requires Python 3.13 and [ttyd](https://github.com/tsl0922/ttyd) on `PATH`
+(or point `FALEN_TTYD_BIN` at the binary).
 
 ```bash
 python -m venv .venv
@@ -80,14 +82,32 @@ copy .env.example .env        # then fill in the keys
 
 ## Run
 
+### Terminal only
+
 ```bash
-python main.py "Improve the performance of the current matrix multiplication implementation."
+python interface.py
 ```
 
-Or without arguments to be prompted:
+Then use the shell commands:
+
+- `run` — ask for a problem and start the loop.
+- `kernelExample` — run the fixed matrix-multiplication example.
+- `introduce`, `about`, `manual`, `exit`.
+
+### With ttyd
 
 ```bash
-python main.py
+bash start.sh
+```
+
+The broker listens on `PORT` (default `7681`). Open `http://localhost:7681/`:
+each visitor is redirected to `/s/<sessionId>/`, where a dedicated `ttyd`
+process runs `interface.py` with its own code directory under `sessions/`.
+
+On Windows without a POSIX shell, run the broker directly:
+
+```bash
+python sessionBroker.py
 ```
 
 ## Environment
@@ -96,21 +116,20 @@ python main.py
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | yes | All LLM calls |
 | `JEV_API_KEY` | yes | Hypothesis-count decision (TypeSafe JEV) |
-| `FALEN_CODE_DIR` | no | Where hypothesis code is written; defaults to `temporaryCode/` |
+| `FALEN_CODE_DIR` | no | Where hypothesis code is written; set per ttyd session |
 | `FALEN_SESSION_ID` | no | Session id attached to tracker records |
+| `FALEN_TTYD_BIN` | no | Path to `ttyd` when it is not on `PATH` |
+| `PORT` | no | Broker port, default `7681` |
 | `SUPABASE_URL` / `SUPABASE_SECRET_KEY` | no | Remote ops logging |
 | `FALEN_TRACKER_DB` | no | Local tracker SQLite path |
-
-The loop deletes generated `.py` files from `FALEN_CODE_DIR` (or
-`temporaryCode/`) when it finishes, so that directory should be treated as
-scratch space, not as storage.
 
 ## Status and limitations
 
 - Single sequential loop; no retries across agents.
 - One research response per run, with a fixed cap on searches.
 - Generated code is executed locally without isolation.
-- The `temporaryCode/` files are leftover examples from earlier runs.
+- `sessions/` and `temporaryCode/` are scratch space: generated `.py` files are
+  deleted when a run finishes.
 
 ## License
 

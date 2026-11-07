@@ -4,5 +4,5 @@ venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
-sessions/*.sqlite
-sessions/*.sqlite-journal
+sessions/
+nltk_data/
