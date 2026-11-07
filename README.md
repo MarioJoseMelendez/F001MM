@@ -1,26 +1,21 @@
 # F001MM
 
-**Falen test 001 Mario Melendez.**
+F001MM means Falen test 001 Mario Melendez.
 
-F001MM is a first attempt at a **scientific-agent architecture**: a set of
-specialized agents that take a problem, research the literature, propose
-hypotheses as executable code, run them, and evaluate the measured result.
-
-It is published as an honest record of a negative result.
+This repository is a first attempt at a scientific-agent architecture. It takes
+a problem, researches the literature, proposes hypotheses as executable code,
+runs them and evaluates the measured result.
 
 ## What we found
 
-The architecture worked end to end, but it was **very expensive to run** and,
-in the end, **did not add anything** over a conventional single model call.
-The extra agents mostly added weight and latency: more tokens, more requests,
-more moving parts, and more places for the loop to drift. In several cases the
-multi-agent pipeline produced **worse answers than one direct call** to the
-model.
+The architecture ran end to end. It was very expensive, and it did not improve
+the results. The extra agents added tokens, requests, latency and failure
+points. In several cases the pipeline produced worse answers than one direct
+model call.
 
-F001MM is therefore not a recommended design. It is the object of study for a
-paper that will be uploaded to this repository later, where the cost, the
-failure modes, and the cases where the architecture lost to a baseline call
-are examined in detail.
+We do not recommend this design. A paper will be added to this repository later
+and will examine the cost, the failure modes and the comparison against a
+baseline call.
 
 ## Architecture
 
@@ -49,52 +44,54 @@ Compressor ──► ranks the measured hypotheses
 explanation printed to the user
 ```
 
-- **Translator** (`orchestrator.py`) converts the prompt into a JSON contract:
-  topic, limitations, baseline, and the variables to measure. It is instructed
-  to use only a baseline the user actually provided and never to invent
-  measurements.
-- **Einstein** (`einstein.py`) makes a single planning response that proposes
-  web and paper searches. `globalFuncs.py` executes them locally through DDGS
-  (web) and OpenAlex (papers), then fetches content for the most promising
-  results.
-- **Researcher / Experimenter / Evaluator** (`compressor.py`) filter the
-  promising evidence, ask JEV for a hypothesis count, generate candidate Python
-  code, execute it, and evaluate the measured output.
-- **Compressor** ranks the hypotheses that survived evaluation.
-- **Tracker** (`tracker.py`) optionally records submitted problems and results.
-  Without Supabase credentials it falls back to a local SQLite file.
+**Translator** (`orchestrator.py`) converts the prompt into a JSON contract with
+the topic, the limitations, the baseline and the variables to measure. It only
+uses a baseline the user provided and never invents measurements.
 
-Everything is sequential. There is no parallel agent execution and no
+**Einstein** (`einstein.py`) proposes web and paper searches in one planning
+response. `globalFuncs.py` runs them through DDGS and OpenAlex and fetches
+content for the most promising results.
+
+**Researcher, Experimenter and Evaluator** (`compressor.py`) filter the
+evidence, ask JEV for a hypothesis count, generate candidate Python code, run it
+and evaluate the output.
+
+**Compressor** ranks the hypotheses that survived evaluation.
+
+**Tracker** (`tracker.py`) records problems and results. It uses Supabase when
+credentials exist and SQLite otherwise.
+
+The loop is sequential. There is no parallel agent execution and no
 cross-agent retry loop.
 
 ## Layout
 
 ```
 F001MM/
-├── interface.py                     # click shell — the agent CLI
-├── sessionBroker.py                 # one ttyd per browser session + proxy
+├── interface.py                     # click shell, the agent CLI
+├── sessionBroker.py                 # one ttyd per browser session and proxy
 ├── start.sh                         # starts the broker
-├── tracker.py                       # optional ops logging (Supabase / SQLite)
+├── tracker.py                       # optional ops logging (Supabase or SQLite)
 ├── requirements.txt
 ├── .env.example
 └── src/agents/
-    ├── globalFuncs.py               # web + paper search, code generation/execution
+    ├── globalFuncs.py               # web and paper search, code generation and execution
     └── enterprise/
         ├── orchestrator.py          # Translator, loop orchestration, explanation
         ├── einstein.py              # research agent
-        ├── compressor.py            # Researcher / Experimenter / Evaluator
+        ├── compressor.py            # Researcher, Experimenter and Evaluator
         ├── prompts.json             # Einstein prompts
         └── temporaryCode/           # hypothesis code written and cleaned per run
 ```
 
-The agent files keep the original flat imports, so `interface.py` adds the
-agent directories to `sys.path` before importing the loop.
+The agent files keep the original flat imports. `interface.py` adds the agent
+directories to `sys.path` before importing the loop.
 
 ## Requirements
 
 - Python 3.13
-- [ttyd](https://github.com/tsl0922/ttyd) on `PATH`, only if you want the
-  browser terminal (you can point `FALEN_TTYD_BIN` at the binary instead)
+- [ttyd](https://github.com/tsl0922/ttyd) on `PATH` for the browser terminal.
+  You can set `FALEN_TTYD_BIN` instead.
 
 ## Setup
 
@@ -113,11 +110,11 @@ Create a `.env` file from `.env.example`.
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | yes | Every LLM call in the loop (Translator, Einstein, hypotheses, explanation) |
 | `JEV_API_KEY` | yes | TypeSafe JEV, used to decide how many hypotheses to generate |
-| `FALEN_CODE_DIR` | no | Directory where hypothesis code is written; the broker sets it per session |
+| `FALEN_CODE_DIR` | no | Directory where hypothesis code is written. The broker sets it per session |
 | `FALEN_SESSION_ID` | no | Session id attached to tracker records |
 | `FALEN_TTYD_BIN` | no | Path to `ttyd` when it is not on `PATH` |
 | `PORT` | no | Broker port, default `7681` |
-| `SUPABASE_URL` / `SUPABASE_SECRET_KEY` | no | Remote ops logging; without them the tracker uses SQLite |
+| `SUPABASE_URL` and `SUPABASE_SECRET_KEY` | no | Remote ops logging. Without them the tracker uses SQLite |
 | `FALEN_TRACKER_DB` | no | Local tracker SQLite path |
 
 The loop spends real tokens on OpenRouter on every run. A single problem can
@@ -131,17 +128,17 @@ trigger several model calls plus web and paper fetches.
 python interface.py
 ```
 
-Inside the shell:
+The shell has these commands.
 
-- `run` — ask for a problem and start the full loop.
-- `kernelExample` — run a fixed matrix-multiplication problem.
-- `about` / `manual` / `introduce` / `exit`.
+- `run` asks for a problem and starts the full loop.
+- `kernelExample` runs a fixed matrix-multiplication problem.
+- `about`, `manual`, `introduce` and `exit` cover the rest.
 
-Good first checks:
+Try these first.
 
 1. `about` renders the architecture without calling any API.
 2. `kernelExample` with a trivial NumPy problem exercises the full pipeline.
-3. Inspect `src/agents/enterprise/temporaryCode/` while it runs; generated
+3. Inspect `src/agents/enterprise/temporaryCode/` while it runs. Generated
    hypotheses are written there and deleted at the end.
 4. Change `FALEN_CODE_DIR` to keep the generated code for inspection.
 
@@ -149,31 +146,39 @@ Good first checks:
 
 ```bash
 bash start.sh
-# or, on Windows without a POSIX shell:
+# or, on Windows without a POSIX shell
 python sessionBroker.py
 ```
 
-The broker listens on `PORT` (default `7681`). Open `http://localhost:7681/`:
-each visitor is redirected to `/s/<sessionId>/`, where a dedicated `ttyd`
+The broker listens on `PORT`, default `7681`. Open `http://localhost:7681/`.
+Each visitor is redirected to `/s/<sessionId>/`, where a dedicated `ttyd`
 process runs `interface.py` with its own code directory under `sessions/`.
 
 ## Notes and limitations
 
-- Generated Python code is executed locally **without isolation**. Do not run
-  this on a machine you do not trust the model with.
-- `sessions/` and `temporaryCode/` are scratch space: generated `.py` files are
-  deleted when a run finishes.
+- Generated Python code is executed locally without isolation. Do not run this
+  on a machine you do not trust the model with.
+- Generated `.py` files in `sessions/` and `temporaryCode/` are deleted at the
+  end of a run.
 - The loop is sequential and has no per-agent retries beyond simple HTTP
   retries.
-- The evaluation step measures what the generated code reports; it does not
+- The evaluation step measures what the generated code reports. It does not
   prove that the measurement is meaningful.
 - There is no academic path and no HTTP API in this repository.
 
 ## Paper
 
-A paper analyzing this architecture — cost, failure modes, and the comparison
-against a conventional single call — will be added to this repository.
+A paper about this architecture will be added to this repository later.
 
 ## License
 
-Not decided yet.
+This work is licensed under the Creative Commons Attribution 4.0
+International License. See `LICENSE`.
+
+If you use it, cite this repository.
+
+> Mario José Melendez Vasquez. F001MM, Falen test 001.
+> https://github.com/MarioJoseMelendez/F001MM
+
+The license requires attribution. Keep the citation when you reuse the
+material.
